@@ -1,15 +1,31 @@
 import streamlit as st
+import speech_recognition as sr
+import io
 from core.audio_tts import SandroidTTS
-from core.audio_stt import SandroidSTT
+from streamlit_mic_recorder import mic_recorder
 
 st.set_page_config(page_title="Sandroid Humanoid AI", page_icon="🤖", layout="centered")
 
-# Inisialisasi Modul
+# Inisialisasi Modul TTS
 @st.cache_resource
-def load_modules():
-    return SandroidSTT(), SandroidTTS()
+def load_tts():
+    return SandroidTTS()
 
-stt_engine, tts_engine = load_modules()
+tts_engine = load_tts()
+
+# Fungsi konversi audio browser ke Teks (STT)
+def transcribe_audio(audio_bytes):
+    recognizer = sr.Recognizer()
+    audio_file = io.BytesIO(audio_bytes)
+    try:
+        with sr.AudioFile(audio_file) as source:
+            audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data, language="id-ID")
+            return text
+    except sr.UnknownValueError:
+        return "UNKNOWN"
+    except Exception as e:
+        return f"ERROR: {str(e)}"
 
 st.title("🤖 Sandroid Dashboard")
 st.caption("Humanoid Engine | Repository Mode (Modular Architecture)")
@@ -29,28 +45,46 @@ st.divider()
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🎙️ Bicara dengan Sandroid", use_container_width=True, type="primary"):
-        st.toast("🎤 Sandroid sedang mendengarkan...", icon="🔴")
-        result = stt_engine.listen()
+    st.write("🎙️ **Bicara dengan Sandroid:**")
+    # Perekam Audio Browser Client
+    audio = mic_recorder(
+        start_prompt="🔴 Klik untuk Bicara",
+        stop_prompt="⬛ Selesai Bicara",
+        key='recorder'
+    )
+
+    if audio:
+        user_text = transcribe_audio(audio['bytes'])
         
-        if result["status"] == "success":
-            user_text = result["text"]
-            st.session_state.messages.append({"role": "user", "content": user_text})
-            
-            # Respon sementara sebelum disambungkan ke Otak Cloud Uncensored
-            response_text = f"Sandroid mendengar Kak Donny mengucapkan: '{user_text}'. Struktur repositori kita berjalan dengan lancar!"
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
-            st.rerun()
+        if user_text == "UNKNOWN":
+            st.warning("Suara kurang jelas terdeteksi. Boleh diulangi Kak Donny?")
+        elif user_text.startswith("ERROR"):
+            st.error(f"Gagal memproses audio: {user_text}")
         else:
-            st.warning(result["text"])
+            # Cegah pemrosesan ganda audio yang sama
+            if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
+                st.session_state.last_processed_audio = audio['id']
+                
+                # Simpan ucapan Kak Donny
+                st.session_state.messages.append({"role": "user", "content": user_text})
+                
+                # Respon sementara Sandroid
+                response_text = f"Sandroid mendengar Kak Donny mengucapkan: '{user_text}'. Pendengaranku dari browser sudah berjalan lancar!"
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
+                st.rerun()
 
 with col2:
-    if st.button("🔊 Tes Suara Sandroid", use_container_width=True):
-        tts_engine.speak("Halo Kak Donny, sistem modular repositori kita sudah berfungsi dengan sangat baik.")
+    st.write("🔊 **Tes Suara Sandroid:**")
+    if st.button("Play Voice Test", use_container_width=True):
+        audio_file = tts_engine.generate_mp3("Halo Kak Donny, sistem suara dan pendengaranku lewat browser sudah berfungsi sempurna.")
+        if audio_file:
+            st.audio(audio_file, format="audio/mp3", autoplay=True)
 
 # Auto play suara respon Sandroid
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     last_msg = st.session_state.messages[-1]["content"]
     if "last_spoken" not in st.session_state or st.session_state.last_spoken != last_msg:
         st.session_state.last_spoken = last_msg
-        tts_engine.speak(last_msg)
+        audio_file = tts_engine.generate_mp3(last_msg)
+        if audio_file:
+            st.audio(audio_file, format="audio/mp3", autoplay=True)
