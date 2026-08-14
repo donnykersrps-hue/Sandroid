@@ -4,3 +4,4 @@ edge-tts>=6.1.9
 python-dotenv>=1.0.0
 requests>=2.31.0
 streamlit-mic-recorder>=0.0.8
+pydub>=0.25.1
