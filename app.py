@@ -1,6 +1,7 @@
+import io
 import streamlit as st
 import speech_recognition as sr
-import io
+from pydub import AudioSegment
 from core.audio_tts import SandroidTTS
 from streamlit_mic_recorder import mic_recorder
 
@@ -13,12 +14,17 @@ def load_tts():
 
 tts_engine = load_tts()
 
-# Fungsi konversi audio browser ke Teks (STT)
+# Fungsi konversi audio browser (WEBM) -> WAV -> Teks (STT)
 def transcribe_audio(audio_bytes):
     recognizer = sr.Recognizer()
-    audio_file = io.BytesIO(audio_bytes)
     try:
-        with sr.AudioFile(audio_file) as source:
+        # Konversi format audio WEBM/OGG dari browser ke WAV
+        audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+        wav_io = io.BytesIO()
+        audio_segment.export(wav_io, format="wav")
+        wav_io.seek(0)
+        
+        with sr.AudioFile(wav_io) as source:
             audio_data = recognizer.record(source)
             text = recognizer.recognize_google(audio_data, language="id-ID")
             return text
@@ -46,7 +52,6 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.write("🎙️ **Bicara dengan Sandroid:**")
-    # Perekam Audio Browser Client
     audio = mic_recorder(
         start_prompt="🔴 Klik untuk Bicara",
         stop_prompt="⬛ Selesai Bicara",
@@ -61,14 +66,11 @@ with col1:
         elif user_text.startswith("ERROR"):
             st.error(f"Gagal memproses audio: {user_text}")
         else:
-            # Cegah pemrosesan ganda audio yang sama
             if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
                 st.session_state.last_processed_audio = audio['id']
                 
-                # Simpan ucapan Kak Donny
                 st.session_state.messages.append({"role": "user", "content": user_text})
                 
-                # Respon sementara Sandroid
                 response_text = f"Sandroid mendengar Kak Donny mengucapkan: '{user_text}'. Pendengaranku dari browser sudah berjalan lancar!"
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
                 st.rerun()
