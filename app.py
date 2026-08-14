@@ -6,55 +6,94 @@ from pydub import AudioSegment
 from core.audio_tts import SandroidTTS
 from streamlit_mic_recorder import mic_recorder
 
-# --- 1. SETTING HALAMAN & STYLING FUTURISTIK ---
-st.set_page_config(page_title="Sandroid - Humanoid AI", page_icon="🤖", layout="centered")
+# --- 1. SETTING HALAMAN & THEME CYBERPUNK NEON ---
+st.set_page_config(
+    page_title="Sandroid - Humanoid AI", 
+    page_icon="🤖", 
+    layout="centered"
+)
 
-st.markdown("""
+# URL Gambar Background Neon Corridor di GitHub
+BACKGROUND_IMAGE_URL = "https://raw.githubusercontent.com/donnykersrps-hue/Sandroid/main/background.jpg"
+
+st.markdown(f"""
     <style>
-        /* Modern Dark Theme Styling */
-        .stApp {
-            background-color: #0E1117;
+        /* Cyberpunk Neon Background Overlay */
+        .stApp {{
+            background: linear-gradient(rgba(10, 10, 18, 0.70), rgba(10, 10, 18, 0.85)), 
+                        url('{BACKGROUND_IMAGE_URL}');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             color: #FAFAFA;
-        }
-        .sandroid-card {
-            background: linear-gradient(135deg, #1E1E2E 0%, #2D2D44 100%);
-            border-radius: 20px;
+        }}
+
+        /* Glassmorphism Sandroid HUD Card */
+        .sandroid-card {{
+            background: rgba(18, 18, 32, 0.55);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-radius: 24px;
             padding: 30px;
             text-align: center;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(236, 72, 153, 0.35);
+            box-shadow: 0 0 30px rgba(236, 72, 153, 0.25), inset 0 0 20px rgba(0, 240, 255, 0.15);
             margin-bottom: 25px;
-        }
-        .sandroid-avatar {
+        }}
+
+        .sandroid-avatar {{
             font-size: 80px;
-            margin-bottom: 10px;
-            filter: drop-shadow(0 0 15px #7928CA);
-        }
-        .status-online {
-            color: #00FF87;
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: 1px;
-        }
-        .mic-box {
-            background-color: #161B22;
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px solid #30363D;
+            margin-bottom: 5px;
+            filter: drop-shadow(0 0 18px #ec4899);
+        }}
+
+        .sandroid-title {{
+            margin: 0;
+            color: #FFFFFF;
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }}
+
+        .status-online {{
+            color: #00F0FF;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px #00F0FF;
+            margin-top: 5px;
+        }}
+
+        /* Glass Box Control Tempat Mic */
+        .mic-box {{
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.15);
             text-align: center;
-        }
+            margin-bottom: 20px;
+        }}
+
+        /* Sembunyikan elemen bawaan streamlit yang mengganggu */
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
     </style>
 """, unsafe_allow_html=True)
 
-# Inisialisasi Engine Suara
+# --- 2. INISIALISASI MODULE & FUNGSI STT ---
 @st.cache_resource
 def load_tts():
     return SandroidTTS()
 
 tts_engine = load_tts()
 
-# --- 2. FUNGSI TRANSSKRIPSI SUARA (STT) ---
 def transcribe_audio(audio_bytes):
+    """Konversi audio WEBM browser -> WAV -> Teks (Google STT)"""
     recognizer = sr.Recognizer()
     try:
         audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
@@ -71,66 +110,67 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return f"ERROR: {str(e)}"
 
-# --- 3. DISPLAY UTAMA SANDROID (VISUAL HUD) ---
+# --- 3. VISUAL DISPLAY SANDROID (HUD TAMPILAN UTAMA) ---
 st.markdown("""
     <div class="sandroid-card">
         <div class="sandroid-avatar">🤖</div>
-        <h2 style="margin: 0; color: #FFFFFF;">SANDROID</h2>
-        <p class="status-online">● HUMANOID ACTIVE & LISTENING</p>
+        <div class="sandroid-title">SANDROID</div>
+        <div class="status-online">● HUMANOID SYSTEM ONLINE</div>
     </div>
 """, unsafe_allow_html=True)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. AREA KONTROL SUARA ---
+# --- 4. PANEL PENDENGARAN (STREAMING MIC CONTROL) ---
 st.markdown('<div class="mic-box">', unsafe_allow_html=True)
-st.write("🎙️ **Telinga Sandroid (Aktif):**")
-st.caption("Bicaralah secara alami. Akhiri kalimat dengan **'jawab aku'** agar Sandroid merespons.")
+st.write("🎙️ **Modul Pendengaran Aktif**")
+st.caption("Bicaralah secara alami. Akhiri dengan frasa **'jawab aku'** agar Sandroid membalas bersuara.")
 
-# Widget Perekam Audio (Auto-Detect / Sekali Klik Buka Mic)
+# Widget recorder auto-detect dari browser
 audio = mic_recorder(
-    start_prompt="🎙️ Buka Pendengaran",
-    stop_prompt="⏹️ Hentikan",
-    key='continuous_recorder'
+    start_prompt="🔴 Buka Pendengaran",
+    stop_prompt="⬛ Selesai",
+    key='sandroid_continuous_listener'
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. LOGIKA PEMROSESAN PERCAKAPAN & TRIGGER "JAWAB AKU" ---
+# --- 5. LOGIKA PEMROSESAN & TRIGGER "JAWAB AKU" ---
 if audio:
     user_text = transcribe_audio(audio['bytes'])
     
     if user_text not in ["UNKNOWN"] and not user_text.startswith("ERROR"):
+        # Mencegah pemrosesan ganda pada audio ID yang sama
         if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
             st.session_state.last_processed_audio = audio['id']
             
+            # Simpan rekaman obrolan secara internal
             st.session_state.messages.append({"role": "user", "content": user_text})
             
-            # CEK KATA KUNCI TRIGGER: "jawab aku"
+            # Deteksi Kata Kunci Trigger "jawab aku"
             clean_input = user_text.lower().strip()
             if "jawab aku" in clean_input:
-                # Menghapus frasa "jawab aku" agar tidak mengotori jawaban
+                # Bersihkan kata "jawab aku" dari isi prompt
                 prompt_content = re.sub(r'jawab\s+aku', '', user_text, flags=re.IGNORECASE).strip()
                 
-                # Respon sementara Sandroid
+                # Respon sementara Sandroid (sebelum menyambung ke Otak Uncensored Cloud)
                 if prompt_content:
-                    response_text = f"Siap Kak Donny, aku mendengar permintaanmu: '{prompt_content}'."
+                    response_text = f"Sandroid mendengar Kak Donny: '{prompt_content}'. Modul pendengaran dan suaraku di lorong ini sudah berfungsi sempurna!"
                 else:
-                    response_text = "Iya Kak Donny, Sandroid di sini. Ada yang bisa aku bantu?"
+                    response_text = "Iya Kak Donny, Sandroid mendengarmu. Ada yang ingin kamu bicarakan?"
                 
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
                 
-                # Putar Suara Jawaban Sandroid
+                # Putar Suara Respon Wanita Sandroid
                 audio_file = tts_engine.generate_mp3(response_text)
                 if audio_file:
                     st.audio(audio_file, format="audio/mp3", autoplay=True)
 
-# --- 6. RIWAYAT PERCAKAPAN (SEMBUNYI / EXPANDABLE) ---
-st.write("")
-with st.expander("📄 Lihat Transkrip Percakapan (Hidden Log)"):
+# --- 6. LOG CHAT TERSEMBUNYI (EXPANDABLE) ---
+with st.expander("📄 Transkrip Percakapan (Hidden Log)"):
     if st.session_state.messages:
         for msg in st.session_state.messages:
             role_label = "👤 Kak Donny" if msg["role"] == "user" else "🤖 Sandroid"
             st.write(f"**{role_label}:** {msg['content']}")
     else:
-        st.caption("Belum ada riwayat obrolan.")
+        st.caption("Belum ada riwayat percakapan.")
