@@ -13,7 +13,6 @@ st.set_page_config(
     layout="centered"
 )
 
-# URL Gambar Background Neon Corridor di GitHub
 BACKGROUND_IMAGE_URL = "https://raw.githubusercontent.com/donnykersrps-hue/Sandroid/main/background.jpg"
 
 st.markdown(f"""
@@ -79,13 +78,12 @@ st.markdown(f"""
             margin-bottom: 20px;
         }}
 
-        /* Sembunyikan elemen bawaan streamlit yang mengganggu */
         #MainMenu {{visibility: hidden;}}
         footer {{visibility: hidden;}}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. INISIALISASI MODULE & FUNGSI STT ---
+# --- 2. INISIALISASI ENGINE ---
 @st.cache_resource
 def load_tts():
     return SandroidTTS()
@@ -110,7 +108,7 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return f"ERROR: {str(e)}"
 
-# --- 3. VISUAL DISPLAY SANDROID (HUD TAMPILAN UTAMA) ---
+# --- 3. DISPLAY HUD UTAMA ---
 st.markdown("""
     <div class="sandroid-card">
         <div class="sandroid-avatar">🤖</div>
@@ -122,12 +120,11 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. PANEL PENDENGARAN (STREAMING MIC CONTROL) ---
+# --- 4. PANEL PENDENGARAN ---
 st.markdown('<div class="mic-box">', unsafe_allow_html=True)
 st.write("🎙️ **Modul Pendengaran Aktif**")
-st.caption("Bicaralah secara alami. Akhiri dengan frasa **'jawab aku'** agar Sandroid membalas bersuara.")
+st.caption("Klik tombol mikrofon di bawah untuk mulai mengobrol secara otomatis bersama Sandroid.")
 
-# Widget recorder auto-detect dari browser
 audio = mic_recorder(
     start_prompt="🔴 Buka Pendengaran",
     stop_prompt="⬛ Selesai",
@@ -135,38 +132,30 @@ audio = mic_recorder(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. LOGIKA PEMROSESAN & TRIGGER "JAWAB AKU" ---
+# --- 5. LOGIKA PEMROSESAN TANPA TRIGGER ("AUTO-HUMAN RESPONSE") ---
 if audio:
     user_text = transcribe_audio(audio['bytes'])
     
     if user_text not in ["UNKNOWN"] and not user_text.startswith("ERROR"):
-        # Mencegah pemrosesan ganda pada audio ID yang sama
+        # Pencegahan pemrosesan ulang audio ID yang sama saat Streamlit rerun
         if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
             st.session_state.last_processed_audio = audio['id']
             
-            # Simpan rekaman obrolan secara internal
+            # Rekam pesan user ke dalam memory session
             st.session_state.messages.append({"role": "user", "content": user_text})
             
-            # Deteksi Kata Kunci Trigger "jawab aku"
-            clean_input = user_text.lower().strip()
-            if "jawab aku" in clean_input:
-                # Bersihkan kata "jawab aku" dari isi prompt
-                prompt_content = re.sub(r'jawab\s+aku', '', user_text, flags=re.IGNORECASE).strip()
-                
-                # Respon sementara Sandroid (sebelum menyambung ke Otak Uncensored Cloud)
-                if prompt_content:
-                    response_text = f"Sandroid mendengar Kak Donny: '{prompt_content}'. Modul pendengaran dan suaraku di lorong ini sudah berfungsi sempurna!"
-                else:
-                    response_text = "Iya Kak Donny, Sandroid mendengarmu. Ada yang ingin kamu bicarakan?"
-                
-                st.session_state.messages.append({"role": "assistant", "content": response_text})
-                
-                # Putar Suara Respon Wanita Sandroid
-                audio_file = tts_engine.generate_mp3(response_text)
-                if audio_file:
-                    st.audio(audio_file, format="audio/mp3", autoplay=True)
+            # Respon Alami tanpa Kata Kunci & tanpa Pengumuman Modul Sistem
+            # [Catatan: Tempat ini siap disambungkan ke API LLM/Gemini sesuai sandroid_persona.json]
+            response_text = f"Halo Kak Donny! Aku dengar tadi kamu bilang '{user_text}'. Ada hal menarik apa lagi yang mau kita bahas?"
+            
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            
+            # Trigger Audio Output TTS
+            audio_file = tts_engine.generate_mp3(response_text)
+            if audio_file:
+                st.audio(audio_file, format="audio/mp3", autoplay=True)
 
-# --- 6. LOG CHAT TERSEMBUNYI (EXPANDABLE) ---
+# --- 6. TRANSKRIP PERCAKAPAN (HIDDEN LOG) ---
 with st.expander("📄 Transkrip Percakapan (Hidden Log)"):
     if st.session_state.messages:
         for msg in st.session_state.messages:
