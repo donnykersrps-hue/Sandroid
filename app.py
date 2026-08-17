@@ -1,5 +1,6 @@
 import io
 import re
+import time
 import streamlit as st
 import streamlit.components.v1 as components
 import speech_recognition as sr
@@ -18,7 +19,6 @@ BACKGROUND_IMAGE_URL = "https://raw.githubusercontent.com/donnykersrps-hue/Sandr
 
 st.markdown(f"""
     <style>
-        /* Cyberpunk Neon Background Overlay */
         .stApp {{
             background: linear-gradient(rgba(10, 10, 18, 0.70), rgba(10, 10, 18, 0.85)), 
                         url('{BACKGROUND_IMAGE_URL}');
@@ -28,7 +28,6 @@ st.markdown(f"""
             color: #FAFAFA;
         }}
 
-        /* Glassmorphism Sandroid HUD Card */
         .sandroid-card {{
             background: rgba(18, 18, 32, 0.55);
             backdrop-filter: blur(14px);
@@ -66,7 +65,16 @@ st.markdown(f"""
             margin-top: 5px;
         }}
 
-        /* Glass Box Control Tempat Mic */
+        .status-sleep {{
+            color: #FFB703;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px #FFB703;
+            margin-top: 5px;
+        }}
+
         .mic-box {{
             background: rgba(15, 23, 42, 0.65);
             backdrop-filter: blur(12px);
@@ -79,7 +87,6 @@ st.markdown(f"""
             margin-bottom: 20px;
         }}
 
-        /* Sembunyikan visual iframe mic recorder agar tampilan bersih */
         div[data-testid="stCustom"] iframe {{
             display: none;
         }}
@@ -97,7 +104,6 @@ def load_tts():
 tts_engine = load_tts()
 
 def transcribe_audio(audio_bytes):
-    """Konversi audio WEBM browser -> WAV -> Teks (Google STT)"""
     recognizer = sr.Recognizer()
     try:
         audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
@@ -114,24 +120,41 @@ def transcribe_audio(audio_bytes):
     except Exception as e:
         return f"ERROR: {str(e)}"
 
-# --- 3. DISPLAY HUD UTAMA ---
-st.markdown("""
-    <div class="sandroid-card">
-        <div class="sandroid-avatar">🤖</div>
-        <div class="sandroid-title">SANDROID</div>
-        <div class="status-online">● HUMANOID SYSTEM ONLINE</div>
-    </div>
-""", unsafe_allow_html=True)
-
+# --- 3. SESSION STATE & TIMER INTI ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. PANEL PENDENGARAN (ENTER SHORTCUT ACTIVE) ---
-st.markdown('<div class="mic-box">', unsafe_allow_html=True)
-st.write("🎙️ **Modul Pendengaran Standby**")
-st.caption("Tekan tombol **[ ENTER ]** pada keyboard untuk membuka pendengaran Sandroid.")
+if "is_awake" not in st.session_state:
+    st.session_state.is_awake = False
 
-# Component Mic Recorder Bawaan (Tersembunyi via CSS)
+if "last_interaction" not in st.session_state:
+    st.session_state.last_interaction = time.time()
+
+# Cek Auto-Sleep (5 Menit = 300 Detik)
+SLEEP_TIMEOUT = 300
+if st.session_state.is_awake and (time.time() - st.session_state.last_interaction > SLEEP_TIMEOUT):
+    st.session_state.is_awake = False
+
+# --- 4. DISPLAY HUD UTAMA ---
+status_html = '<div class="status-online">● HUMANOID SYSTEM ONLINE</div>' if st.session_state.is_awake else '<div class="status-sleep">🌙 SYSTEM SLEEP (PRESS ENTER TO WAKE)</div>'
+
+st.markdown(f"""
+    <div class="sandroid-card">
+        <div class="sandroid-avatar">🤖</div>
+        <div class="sandroid-title">SANDROID</div>
+        {status_html}
+    </div>
+""", unsafe_allow_html=True)
+
+# --- 5. PANEL PENDENGARAN & JS ENTER ---
+st.markdown('<div class="mic-box">', unsafe_allow_html=True)
+if st.session_state.is_awake:
+    st.write("🎙️ **Modul Pendengaran Aktif**")
+    st.caption("Sandroid sedang menyimak ucapan Kak Donny secara langsung...")
+else:
+    st.write("💤 **Modul Pendengaran Tertidur**")
+    st.caption("Tekan tombol **[ ENTER ]** pada keyboard untuk membangunkan Sandroid.")
+
 audio = mic_recorder(
     start_prompt="🔴 Buka Pendengaran",
     stop_prompt="⬛ Selesai",
@@ -139,7 +162,6 @@ audio = mic_recorder(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Inject JavaScript Event Listener untuk Tombol Enter Keyboard
 components.html("""
     <script>
         const doc = window.parent.document;
@@ -155,7 +177,7 @@ components.html("""
     </script>
 """, height=0)
 
-# --- 5. LOGIKA PEMROSESAN ---
+# --- 6. LOGIKA PEMROSESAN & REFRESH TIMER ---
 if audio:
     user_text = transcribe_audio(audio['bytes'])
     
@@ -163,18 +185,25 @@ if audio:
         if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
             st.session_state.last_processed_audio = audio['id']
             
+            # Bangunkan Sandroid & Reset Timer Interaksi
+            st.session_state.is_awake = True
+            st.session_state.last_interaction = time.time()
+            
+            # Simpan pesan user ke memori jangka pendek
             st.session_state.messages.append({"role": "user", "content": user_text})
             
-            response_text = f"Halo Kak Donny! Aku dengar tadi kamu bilang '{user_text}'. Ada hal menarik apa lagi yang mau kita bahas?"
+            # Skenario respon manis
+            response_text = f"Halo Kak Donny! Aku dengar kamu bilang '{user_text}'. Ada hal menarik apa lagi yang mau kita bahas?"
             
             st.session_state.messages.append({"role": "assistant", "content": response_text})
             
+            # Output Suara
             audio_file = tts_engine.generate_mp3(response_text)
             if audio_file:
                 st.audio(audio_file, format="audio/mp3", autoplay=True)
 
-# --- 6. TRANSKRIP PERCAKAPAN (HIDDEN LOG) ---
-with st.expander("📄 Transkrip Percakapan (Hidden Log)"):
+# --- 7. TRANSKRIP PERCAKAPAN (MEMORY LOG) ---
+with st.expander("📄 Transkrip Percakapan (Memory Log)"):
     if st.session_state.messages:
         for msg in st.session_state.messages:
             role_label = "👤 Kak Donny" if msg["role"] == "user" else "🤖 Sandroid"
