@@ -1,6 +1,7 @@
 import io
 import re
 import streamlit as st
+import streamlit.components.v1 as components
 import speech_recognition as sr
 from pydub import AudioSegment
 from core.audio_tts import SandroidTTS
@@ -78,6 +79,11 @@ st.markdown(f"""
             margin-bottom: 20px;
         }}
 
+        /* Sembunyikan visual iframe mic recorder agar tampilan bersih */
+        div[data-testid="stCustom"] iframe {{
+            display: none;
+        }}
+
         #MainMenu {{visibility: hidden;}}
         footer {{visibility: hidden;}}
     </style>
@@ -120,11 +126,12 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. PANEL PENDENGARAN ---
+# --- 4. PANEL PENDENGARAN (ENTER SHORTCUT ACTIVE) ---
 st.markdown('<div class="mic-box">', unsafe_allow_html=True)
-st.write("🎙️ **Modul Pendengaran Aktif**")
-st.caption("Klik tombol mikrofon di bawah untuk mulai mengobrol secara otomatis bersama Sandroid.")
+st.write("🎙️ **Modul Pendengaran Standby**")
+st.caption("Tekan tombol **[ ENTER ]** pada keyboard untuk membuka pendengaran Sandroid.")
 
+# Component Mic Recorder Bawaan (Tersembunyi via CSS)
 audio = mic_recorder(
     start_prompt="🔴 Buka Pendengaran",
     stop_prompt="⬛ Selesai",
@@ -132,25 +139,36 @@ audio = mic_recorder(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. LOGIKA PEMROSESAN TANPA TRIGGER ("AUTO-HUMAN RESPONSE") ---
+# Inject JavaScript Event Listener untuk Tombol Enter Keyboard
+components.html("""
+    <script>
+        const doc = window.parent.document;
+        doc.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const iframes = doc.querySelectorAll('iframe');
+                iframes.forEach(iframe => {
+                    const btn = iframe.contentDocument?.querySelector('button');
+                    if (btn) btn.click();
+                });
+            }
+        });
+    </script>
+""", height=0)
+
+# --- 5. LOGIKA PEMROSESAN ---
 if audio:
     user_text = transcribe_audio(audio['bytes'])
     
     if user_text not in ["UNKNOWN"] and not user_text.startswith("ERROR"):
-        # Pencegahan pemrosesan ulang audio ID yang sama saat Streamlit rerun
         if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
             st.session_state.last_processed_audio = audio['id']
             
-            # Rekam pesan user ke dalam memory session
             st.session_state.messages.append({"role": "user", "content": user_text})
             
-            # Respon Alami tanpa Kata Kunci & tanpa Pengumuman Modul Sistem
-            # [Catatan: Tempat ini siap disambungkan ke API LLM/Gemini sesuai sandroid_persona.json]
             response_text = f"Halo Kak Donny! Aku dengar tadi kamu bilang '{user_text}'. Ada hal menarik apa lagi yang mau kita bahas?"
             
             st.session_state.messages.append({"role": "assistant", "content": response_text})
             
-            # Trigger Audio Output TTS
             audio_file = tts_engine.generate_mp3(response_text)
             if audio_file:
                 st.audio(audio_file, format="audio/mp3", autoplay=True)
