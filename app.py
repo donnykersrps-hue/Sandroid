@@ -146,10 +146,10 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 5. PANEL PENDENGARAN & JS ENTER ---
+# --- 5. PANEL PENDENGARAN & AUTO-STANDBY JS ---
 st.markdown('<div class="mic-box">', unsafe_allow_html=True)
 if st.session_state.is_awake:
-    st.write("🎙️ **Modul Pendengaran Aktif**")
+    st.write("🎙️ **Modul Pendengaran Aktif (Standby)**")
     st.caption("Sandroid sedang menyimak ucapan Kak Donny secara langsung...")
 else:
     st.write("💤 **Modul Pendengaran Tertidur**")
@@ -162,22 +162,45 @@ audio = mic_recorder(
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
+# Event Listener: Mengaktifkan Mic lewat Enter ATAU Otomatis setelah Suara Sandroid Selesai Diputar
 components.html("""
     <script>
         const doc = window.parent.document;
+        
+        // Fungsi untuk trigger tombol mic tersembunyi
+        function startListening() {
+            const iframes = doc.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                const btn = iframe.contentDocument?.querySelector('button');
+                if (btn) btn.click();
+            });
+        }
+
+        // Listener 1: Tombol ENTER Manual
         doc.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
-                const iframes = doc.querySelectorAll('iframe');
-                iframes.forEach(iframe => {
-                    const btn = iframe.contentDocument?.querySelector('button');
-                    if (btn) btn.click();
-                });
+                startListening();
             }
         });
+
+        // Listener 2: Auto-Standby setelah Audio Sandroid Selesai Berbicara
+        setInterval(() => {
+            const audioElements = doc.querySelectorAll('audio');
+            audioElements.forEach(audio => {
+                if (!audio.dataset.hasEndedListener) {
+                    audio.dataset.hasEndedListener = "true";
+                    audio.onended = function() {
+                        setTimeout(() => {
+                            startListening();
+                        }, 500); // Jeda 0.5 detik agar mulus
+                    };
+                }
+            });
+        }, 1000);
     </script>
 """, height=0)
 
-# --- 6. LOGIKA PEMROSESAN & REFRESH TIMER ---
+# --- 6. LOGIKA PEMROSESAN ---
 if audio:
     user_text = transcribe_audio(audio['bytes'])
     
@@ -185,19 +208,15 @@ if audio:
         if "last_processed_audio" not in st.session_state or st.session_state.last_processed_audio != audio['id']:
             st.session_state.last_processed_audio = audio['id']
             
-            # Bangunkan Sandroid & Reset Timer Interaksi
             st.session_state.is_awake = True
             st.session_state.last_interaction = time.time()
             
-            # Simpan pesan user ke memori jangka pendek
             st.session_state.messages.append({"role": "user", "content": user_text})
             
-            # Skenario respon manis
             response_text = f"Halo Kak Donny! Aku dengar kamu bilang '{user_text}'. Ada hal menarik apa lagi yang mau kita bahas?"
             
             st.session_state.messages.append({"role": "assistant", "content": response_text})
             
-            # Output Suara
             audio_file = tts_engine.generate_mp3(response_text)
             if audio_file:
                 st.audio(audio_file, format="audio/mp3", autoplay=True)
